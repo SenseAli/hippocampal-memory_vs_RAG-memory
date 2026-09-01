@@ -4,13 +4,13 @@ A side-by-side demo of a hippocampus-style memory agent vs naive RAG, on a resea
 
 The UI shows exactly what each agent retrieved per turn — that's the comparison.
 
-## Architecture (one paragraph)
+## Architecture Used
 
 Local-first Python. sentence-transformers for embeddings (`all-MiniLM-L6-v2`). Ollama for chat (`llama3`, configurable). ChromaDB for vector storage (persistent on disk). FastAPI backend, single-file HTML/JS frontend (no build step). One `uvicorn` command to run.
 
 Two Chroma collections back the hippocampal agent — `episodes` (per-turn detail) and `consolidated_memories` (generalized long-term, produced by the "sleep" pass). One shared collection `chunks` backs naive RAG. Every turn, the hippocampal agent retrieves from both memory tiers, scores hits with cosine + recency, assembles a budgeted context, calls the LLM, and writes two new episodes (user message + assistant reply). Consolidation runs on demand: single-link clusters similar episodes, calls the LLM to produce a generalized summary, and either supersedes the source episodes (soft-delete via `superseded_by`) or coexists with them.
 
-## Run
+## To Run
 
 Prereqs:
 - Python 3.10+
