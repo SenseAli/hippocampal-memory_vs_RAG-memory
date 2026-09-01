@@ -2,7 +2,7 @@
 
 A side-by-side demo of a hippocampus-style memory agent vs naive RAG, on a research / document-grounded chat. The hippocampal agent has two memory tiers (episodic + consolidated) and a manual "sleep" button that runs replay/consolidation. Naive RAG does flat top-k chunk retrieval with no memory of past turns.
 
-The UI shows exactly what each agent retrieved per turn — that's the comparison.
+The comparison is that the UI shows exactly what each agent retrieved per turn.
 
 ## Architecture Used
 
