@@ -17,7 +17,7 @@ Prereqs:
 - [Ollama](https://ollama.com/) installed
 - `ollama pull llama3` (or change `CHAT_MODEL` in `backend/config.py`)
 
-**Note on Windows**: the Ollama desktop app auto-starts a background `ollama serve` on port 11434. If you run `ollama serve` manually you'll get `bind: Only one usage of each socket address...` — that's harmless; it just means the service is already up. Skip the manual command.
+**Note on Windows**: the Ollama desktop app auto-starts a background `ollama serve` on port 11434. If you run `ollama serve` manually you'll get `bind: Only one usage of each socket address...` don't worry about that it just means the service is already up. Skip the manual command.
 
 ```bash
 cd hippocampal-agent
