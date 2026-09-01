@@ -1,0 +1,18 @@
+# Runtime / local data
+data/
+*.db
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.python-version
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

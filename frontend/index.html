@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Hippocampal Agent vs Naive RAG</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #161a22;
+    --panel-2: #1c2230;
+    --border: #2a3142;
+    --text: #e6e8ee;
+    --muted: #8a92a3;
+    --accent: #7aa2f7;
+    --accent-2: #b48bff;
+    --user: #1f2a3a;
+    --assistant: #1a212e;
+    --episode: #3fb98c;
+    --consolidated: #c08bff;
+    --chunk: #f5a25d;
+    --danger: #ef6b6b;
+    --code-bg: #0c0f15;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  header.topbar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 10;
+  }
+  header.topbar h1 { font-size: 14px; margin: 0; font-weight: 600; letter-spacing: 0.02em; }
+  header.topbar .grow { flex: 1; }
+  header.topbar .sid {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px; color: var(--muted);
+    background: var(--code-bg);
+    padding: 3px 6px; border-radius: 4px;
+  }
+  button, input[type="file"]::file-selector-button {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 6px 12px; border-radius: 6px;
+    cursor: pointer; font-size: 13px;
+    font-family: inherit;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #0b0d12; border-color: var(--accent); font-weight: 600; }
+  button.primary:hover { filter: brightness(1.05); }
+  button.sleep { background: var(--accent-2); color: #0b0d12; border-color: var(--accent-2); font-weight: 600; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  main.two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    height: calc(100vh - 49px);
+    background: var(--border);
+  }
+  section.col {
+    display: flex; flex-direction: column;
+    background: var(--bg);
+    min-width: 0;
+  }
+  section.col h2 {
+    margin: 0; padding: 10px 16px;
+    font-size: 13px; font-weight: 600;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+  }
+  section.col h2 .badge {
+    font-size: 10px; padding: 2px 6px; border-radius: 4px;
+    background: var(--panel-2); color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .chat {
+    flex: 1; overflow-y: auto;
+    padding: 12px 16px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .msg {
+    border-radius: 8px;
+    padding: 9px 12px;
+    max-width: 100%;
+    word-wrap: break-word;
+  }
+  .msg.user { background: var(--user); align-self: flex-end; }
+  .msg.assistant { background: var(--assistant); align-self: flex-start; }
+  .msg.system {
+    background: transparent; color: var(--muted);
+    font-size: 12px; font-style: italic; text-align: center;
+    align-self: center;
+  }
+  .msg .role {
+    font-size: 10px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.05em;
+    margin-bottom: 3px;
+  }
+  .msg pre {
+    margin: 4px 0 0; padding: 6px 8px;
+    background: var(--code-bg); border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px; white-space: pre-wrap; word-break: break-word;
+  }
+  details.retrieved {
+    margin-top: 8px;
+    font-size: 12px;
+  }
+  details.retrieved summary {
+    cursor: pointer; color: var(--muted);
+    user-select: none;
+    padding: 2px 0;
+  }
+  details.retrieved summary:hover { color: var(--text); }
+  .hit {
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    border-radius: 6px;
+    padding: 6px 8px;
+    margin: 6px 0;
+    font-size: 12px;
+  }
+  .hit .head {
+    display: flex; align-items: center; gap: 6px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+  }
+  .hit .tag {
+    display: inline-block; padding: 1px 6px; border-radius: 3px;
+    font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+    color: #0b0d12;
+  }
+  .hit .tag.episode { background: var(--episode); }
+  .hit .tag.consolidated { background: var(--consolidated); }
+  .hit .tag.chunk { background: var(--chunk); }
+  .hit .score { color: var(--muted); }
+  .hit .body {
+    margin-top: 4px; color: var(--text);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px; line-height: 1.4;
+    max-height: 140px; overflow-y: auto;
+    background: var(--code-bg); border-radius: 4px; padding: 4px 6px;
+    white-space: pre-wrap;
+  }
+  .controls {
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+    padding: 8px 12px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .stats {
+    display: flex; flex-wrap: wrap; gap: 12px;
+    font-size: 11px; color: var(--muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .stats b { color: var(--text); font-weight: 600; }
+  .composer {
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+    padding: 8px 12px;
+    display: flex; gap: 8px; align-items: flex-end;
+  }
+  .composer textarea {
+    flex: 1; resize: none;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family: inherit; font-size: 13px;
+    min-height: 38px; max-height: 140px;
+  }
+  .composer textarea:focus { outline: none; border-color: var(--accent); }
+  .upload-info { font-size: 11px; color: var(--muted); }
+  .toast {
+    position: fixed; bottom: 16px; right: 16px;
+    background: var(--panel-2); color: var(--text);
+    padding: 10px 14px; border-radius: 6px;
+    border: 1px solid var(--border);
+    font-size: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    z-index: 100;
+    max-width: 320px;
+  }
+  .toast.error { border-color: var(--danger); }
+  .empty {
+    color: var(--muted); font-size: 12px; text-align: center;
+    padding: 30px 10px; font-style: italic;
+  }
+  @media (max-width: 800px) {
+    main.two-col { grid-template-columns: 1fr; height: auto; }
+    .chat { min-height: 240px; max-height: 400px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <h1>Hippocampal Agent vs Naive RAG</h1>
+  <button id="new-session" class="primary">New session</button>
+  <input type="file" id="upload" accept=".txt,.md,.pdf" multiple />
+  <span id="upload-info" class="upload-info"></span>
+  <span class="grow"></span>
+  <span id="sid" class="sid">no session</span>
+</header>
+
+<main class="two-col">
+  <section class="col" id="hippo-col">
+    <h2>
+      Hippocampal agent
+      <span class="badge">episodic + consolidated</span>
+    </h2>
+    <div class="chat" id="hippo-chat">
+      <div class="empty">Upload documents, then send a message to start.</div>
+    </div>
+    <div class="composer">
+      <textarea id="hippo-input" rows="1" placeholder="Ask a question..."></textarea>
+      <button id="hippo-send" class="primary">Send</button>
+    </div>
+    <div class="controls">
+      <button id="sleep-btn" class="sleep">Consolidate (sleep)</button>
+      <div class="stats" id="hippo-stats">
+        <span>Episodes: <b id="stat-epi">0</b><span id="stat-epi-sup" style="color:var(--muted);font-size:10px"></span></span>
+        <span>Consolidated: <b id="stat-cons">0</b></span>
+        <span>Last sleep: <b id="stat-last">never</b></span>
+        <span>Tokens (last turn): <b id="stat-tok">0</b></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="col" id="naive-col">
+    <h2>
+      Naive RAG agent
+      <span class="badge">flat top-k chunks</span>
+    </h2>
+    <div class="chat" id="naive-chat">
+      <div class="empty">Same inputs, no memory of past turns.</div>
+    </div>
+    <div class="composer">
+      <textarea id="naive-input" rows="1" placeholder="Ask a question..."></textarea>
+      <button id="naive-send" class="primary">Send</button>
+    </div>
+  </section>
+</main>
+
+<div id="toast-host"></div>
+
+<script>
+(() => {
+  const $ = (sel) => document.querySelector(sel);
+  const chat = (id) => document.getElementById(id);
+  const els = {
+    newSession: $('#new-session'),
+    upload: $('#upload'),
+    uploadInfo: $('#upload-info'),
+    sid: $('#sid'),
+    hippoChat: $('#hippo-chat'),
+    hippoInput: $('#hippo-input'),
+    hippoSend: $('#hippo-send'),
+    naiveChat: $('#naive-chat'),
+    naiveInput: $('#naive-input'),
+    naiveSend: $('#naive-send'),
+    sleepBtn: $('#sleep-btn'),
+    statEpi: $('#stat-epi'),
+    statEpiSup: $('#stat-epi-sup'),
+    statCons: $('#stat-cons'),
+    statLast: $('#stat-last'),
+    statTok: $('#stat-tok'),
+    toastHost: $('#toast-host'),
+  };
+
+  let sessionId = null;
+
+  // --- Toast ---
+  function toast(msg, kind = 'info', ms = 3500) {
+    const el = document.createElement('div');
+    el.className = 'toast' + (kind === 'error' ? ' error' : '');
+    el.textContent = msg;
+    els.toastHost.appendChild(el);
+    setTimeout(() => el.remove(), ms);
+  }
+
+  // --- Session ---
+  async function newSession() {
+    const r = await fetch('/api/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    if (!r.ok) { toast('Failed to create session', 'error'); return; }
+    const data = await r.json();
+    sessionId = data.session_id;
+    els.sid.textContent = sessionId.slice(0, 8) + '…';
+    els.hippoChat.innerHTML = '<div class="empty">New session. Upload documents, then send a message.</div>';
+    els.naiveChat.innerHTML = '<div class="empty">New session.</div>';
+    refreshStats();
+  }
+
+  // --- Upload ---
+  async function uploadFiles(files) {
+    if (!sessionId) { toast('Create a session first', 'error'); return; }
+    for (const file of files) {
+      const fd = new FormData();
+      fd.append('session_id', sessionId);
+      fd.append('file', file);
+      try {
+        const r = await fetch('/api/upload', { method: 'POST', body: fd });
+        if (!r.ok) { toast(`Upload failed: ${file.name}`, 'error'); continue; }
+        const data = await r.json();
+        els.uploadInfo.textContent = `${data.filename}: ${data.chunk_count} chunks`;
+        toast(`${data.filename}: ${data.chunk_count} chunks`);
+        refreshStats();
+      } catch (e) {
+        toast(`Upload error: ${e.message}`, 'error');
+      }
+    }
+  }
+
+  // --- Stats ---
+  async function refreshStats() {
+    if (!sessionId) return;
+    try {
+      const r = await fetch(`/api/stats?session_id=${encodeURIComponent(sessionId)}`);
+      if (!r.ok) return;
+      const d = await r.json();
+      els.statEpi.textContent = d.episodic_count;
+      els.statEpiSup.textContent = d.episodic_superseded
+        ? ` (${d.episodic_superseded} superseded)`
+        : '';
+      els.statCons.textContent = d.consolidated_count;
+      els.statLast.textContent = d.last_consolidation ? new Date(d.last_consolidation).toLocaleTimeString() : 'never';
+      els.statTok.textContent = d.last_turn_tokens_retrieved;
+    } catch {}
+  }
+
+  // --- Render helpers ---
+  function escapeHtml(s) {
+    return (s || '').replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+  function renderHit(h) {
+    const tagClass = h.kind;
+    const turnSuffix = h.turn_index != null ? ` · turn ${h.turn_index}` : '';
+    const roleSuffix = h.role ? ` · ${h.role}` : '';
+    const scoreText = `score ${(h.final_score ?? h.score ?? 0).toFixed(2)}`;
+    return `
+      <div class="hit">
+        <div class="head">
+          <span class="tag ${tagClass}">${h.kind}</span>
+          <span class="score">${scoreText}${turnSuffix}${roleSuffix}</span>
+        </div>
+        <div class="body">${escapeHtml((h.snippet || h.text || '').slice(0, 600))}</div>
+      </div>
+    `;
+  }
+  function renderRetrieved(hits) {
+    if (!hits || !hits.length) return '<div class="empty">No memories retrieved.</div>';
+    return `<details class="retrieved" open>
+      <summary>${hits.length} retrieved</summary>
+      ${hits.map(renderHit).join('')}
+    </details>`;
+  }
+  function appendMessage(agent, role, content, opts = {}) {
+    const chatEl = agent === 'hippocampal' ? els.hippoChat : els.naiveChat;
+    // Drop the empty placeholder if present.
+    const empty = chatEl.querySelector('.empty');
+    if (empty) empty.remove();
+
+    const wrap = document.createElement('div');
+    wrap.className = `msg ${role}`;
+    let body = '';
+    if (role === 'assistant') {
+      body = `<div class="role">assistant</div><div class="text"></div>`;
+    } else if (role === 'user') {
+      body = `<div class="role">you</div><div class="text">${escapeHtml(content)}</div>`;
+    } else {
+      body = `<div class="text">${escapeHtml(content)}</div>`;
+    }
+    wrap.innerHTML = body;
+    chatEl.appendChild(wrap);
+    chatEl.scrollTop = chatEl.scrollHeight;
+    if (role === 'assistant') {
+      const textEl = wrap.querySelector('.text');
+      textEl.innerHTML = '';
+      if (opts.retrieved) {
+        // Insert the retrieved panel placeholder first; we fill it in on done.
+        const det = document.createElement('div');
+        det.innerHTML = renderRetrieved(opts.retrieved);
+        textEl.appendChild(det.firstChild);
+      }
+      return textEl; // for streaming tokens
+    }
+    return wrap;
+  }
+
+  // --- Stream a message ---
+  async function sendMessage(agent, text) {
+    if (!sessionId) { toast('Create a session first', 'error'); return; }
+    if (!text.trim()) return;
+    const textEl = appendMessage(agent, 'assistant', '', { retrieved: null });
+    let acc = '';
+    let finalRetrieved = null;
+    let finalTokens = 0;
+
+    try {
+      const r = await fetch('/api/message/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, text, agent }),
+      });
+      if (!r.ok || !r.body) {
+        const t = await r.text();
+        textEl.innerHTML = `<span style="color:var(--danger)">Error: ${escapeHtml(t)}</span>`;
+        return;
+      }
+      const reader = r.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        // Split on SSE record boundary.
+        let idx;
+        while ((idx = buf.indexOf('\n\n')) !== -1) {
+          const rec = buf.slice(0, idx);
+          buf = buf.slice(idx + 2);
+          const line = rec.split('\n').find(l => l.startsWith('data:'));
+          if (!line) continue;
+          let payload;
+          try { payload = JSON.parse(line.slice(5).trim()); } catch { continue; }
+          if (payload.type === 'token') {
+            acc += payload.data;
+            // Re-render: preserve any retrieved details we already added.
+            const existingDetails = textEl.querySelector('details.retrieved');
+            const existingDetailsHtml = existingDetails ? existingDetails.outerHTML : '';
+            textEl.innerHTML = escapeHtml(acc).replace(/\n/g, '<br>') + (existingDetailsHtml || '');
+          } else if (payload.type === 'done') {
+            finalRetrieved = payload.retrieved || [];
+            finalTokens = payload.tokens_retrieved || 0;
+            // Final render with the canonical retrieved panel.
+            textEl.innerHTML = escapeHtml(acc).replace(/\n/g, '<br>') + renderRetrieved(finalRetrieved);
+          } else if (payload.type === 'error') {
+            textEl.innerHTML = `<span style="color:var(--danger)">Error: ${escapeHtml(payload.data)}</span>`;
+          }
+        }
+      }
+    } catch (e) {
+      textEl.innerHTML = `<span style="color:var(--danger)">Network error: ${escapeHtml(e.message)}</span>`;
+    }
+    refreshStats();
+  }
+
+  // --- Consolidate ---
+  async function runConsolidate() {
+    if (!sessionId) { toast('Create a session first', 'error'); return; }
+    els.sleepBtn.disabled = true;
+    els.sleepBtn.textContent = 'Consolidating…';
+    try {
+      const r = await fetch('/api/consolidate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+      if (!r.ok) { toast('Consolidation failed', 'error'); return; }
+      const d = await r.json();
+      const created = d.memories_created;
+      const superseded = d.episodes_marked_superseded;
+      const skipped = d.skipped;
+      if (skipped) {
+        toast(`Sleep: ${skipped}`);
+      } else {
+        toast(`Sleep: ${created} new memories, ${superseded} episodes consolidated (${d.duration_ms}ms)`);
+      }
+      refreshStats();
+    } catch (e) {
+      toast(`Sleep error: ${e.message}`, 'error');
+    } finally {
+      els.sleepBtn.disabled = false;
+      els.sleepBtn.textContent = 'Consolidate (sleep)';
+    }
+  }
+
+  // --- Wire up ---
+  els.newSession.addEventListener('click', newSession);
+  els.upload.addEventListener('change', (e) => {
+    const files = Array.from(e.target.files || []);
+    uploadFiles(files);
+    e.target.value = ''; // allow re-upload of same name
+  });
+  els.hippoSend.addEventListener('click', () => {
+    const t = els.hippoInput.value;
+    els.hippoInput.value = '';
+    sendMessage('hippocampal', t);
+  });
+  els.naiveSend.addEventListener('click', () => {
+    const t = els.naiveInput.value;
+    els.naiveInput.value = '';
+    sendMessage('naive', t);
+  });
+  // Enter to send, Shift+Enter for newline.
+  els.hippoInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const t = els.hippoInput.value;
+      els.hippoInput.value = '';
+      sendMessage('hippocampal', t);
+    }
+  });
+  els.naiveInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const t = els.naiveInput.value;
+      els.naiveInput.value = '';
+      sendMessage('naive', t);
+    }
+  });
+  els.sleepBtn.addEventListener('click', runConsolidate);
+
+  // Auto-create first session on load.
+  newSession();
+})();
+</script>
+</body>
+</html>
